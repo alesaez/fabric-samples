@@ -20,7 +20,7 @@ $workspaceName = "<WORKSPACE NAME>"       # The name of the workspace
 
 $commitMessage = "<COMMIT MESSAGE>"       # The commit message
 
-$typesNames = @("CopyJob","Dashboard","DataPipeline","Dataflow","Datamart","Environment","Eventhouse","Eventstream","GraphQLApi","KQLDashboard","KQLDatabase","KQLQueryset","Lakehouse","MLExperiment","MLModel","MirroredDatabase","MirroredWarehouse","MountedDataFactory","Notebook","PaginatedReport","Reflex","Report","SQLDatabase","SQLEndpoint","SemanticModel","SparkJobDefinition","VariableLibrary","Warehouse")  
+$itemTypesNames = @("CopyJob", "Dashboard", "DataPipeline", "Dataflow", "Datamart", "Environment", "Eventhouse", "Eventstream", "GraphQLApi", "KQLDashboard", "KQLDatabase", "KQLQueryset", "Lakehouse", "MLExperiment", "MLModel", "MirroredDatabase", "MirroredWarehouse", "MountedDataFactory", "Notebook", "PaginatedReport", "Reflex", "Report", "SQLDatabase", "SQLEndpoint", "SemanticModel", "SparkJobDefinition", "VariableLibrary", "Warehouse")  
 
 $batchSize = 1000 # The number of items to be processed in each batch. The default value is 1000.
 
@@ -42,10 +42,12 @@ $global:fabricHeaders = @{}
 function SetFabricHeaders() {
     if ($principalType -eq "UserPrincipal") {
         $secureFabricToken = GetSecureTokenForUserPrincipal
-    } elseif ($principalType -eq "ServicePrincipal") {
+    }
+    elseif ($principalType -eq "ServicePrincipal") {
         $secureFabricToken = GetSecureTokenForServicePrincipal
 
-    } else {
+    }
+    else {
         throw "Invalid principal type. Please choose either 'UserPrincipal' or 'ServicePrincipal'."
     }
 
@@ -53,7 +55,7 @@ function SetFabricHeaders() {
     $fabricToken = ConvertSecureStringToPlainText($secureFabricToken)
 
     $global:fabricHeaders = @{
-        'Content-Type' = "application/json"
+        'Content-Type'  = "application/json"
         'Authorization' = "Bearer $fabricToken"
     }
 }
@@ -69,7 +71,7 @@ function GetSecureTokenForUserPrincipal() {
 }
 
 function GetSecureTokenForServicePrincipal() {
-    $secureServicePrincipalSecret  = ConvertTo-SecureString -String $servicePrincipalSecret -AsPlainText -Force
+    $secureServicePrincipalSecret = ConvertTo-SecureString -String $servicePrincipalSecret -AsPlainText -Force
     $credential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $clientId, $secureServicePrincipalSecret
 
     #Login to Azure using service principal
@@ -85,7 +87,8 @@ function ConvertSecureStringToPlainText($secureString) {
     $ssPtr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureString)
     try {
         $plainText = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($ssPtr)
-    } finally {
+    }
+    finally {
         [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ssPtr)
     }
     return $plainText
@@ -97,7 +100,7 @@ function GetWorkspaceByName($workspaceName) {
     $workspaces = (Invoke-RestMethod -Headers $global:fabricHeaders -Uri $getWorkspacesUrl -Method GET).value
 
     # Try to find the workspace by display name
-    $workspace = $workspaces | Where-Object {$_.DisplayName -eq $workspaceName}
+    $workspace = $workspaces | Where-Object { $_.DisplayName -eq $workspaceName }
 
     return $workspace
 }
@@ -106,7 +109,7 @@ function GetErrorResponse($exception) {
     # Relevant only for PowerShell Core
     $errorResponse = $_.ErrorDetails.Message
  
-    if(!$errorResponse) {
+    if (!$errorResponse) {
         # This is needed to support Windows PowerShell
         if (!$exception.Response) {
             return $exception.Message
@@ -123,7 +126,7 @@ function GetErrorResponse($exception) {
 
 function WriteHeaderMessage($message) {
     $messageSeparator = ("=" * 10)
-    $lineSeparator = "=" * ($message.Length + $messageSeparator.Length*2 + 2)
+    $lineSeparator = "=" * ($message.Length + $messageSeparator.Length * 2 + 2)
     Write-Host ""
     Write-Host $lineSeparator -ForegroundColor Green
     Write-Host ($messageSeparator + " " + $message + " " + $messageSeparator) -ForegroundColor Green
@@ -131,28 +134,74 @@ function WriteHeaderMessage($message) {
     Write-Host ""
 }
 
-function GetLongRunningOperationStatus($operationId, $retryAfter, $wait = $false) {
-    # Get Long Running Operation
-    Write-Host "Polling long running operation ID '$operationId' has been started with a retry-after time of '$retryAfter' seconds."
+function WriteTable($data) {
     
-    $getOperationState = "{0}/operations/{1}" -f $global:baseUrl, $operationId
-    do
-    {
-        $operationState = Invoke-RestMethod -Headers $global:fabricHeaders -Uri $getOperationState -Method GET
+    # Get property names dynamically
+    $properties = $data[0].PSObject.Properties.Name
 
-        Write-Host "Long running operation status: $($operationState.Status)"
+    # Calculate max width for each column
+    $columnWidths = @{}
+    foreach ($prop in $properties) {
+        $maxLength = ($data | ForEach-Object { if (($_.$prop) -eq $null) { 0 } else { ($_.$prop).ToString().Length } } | Measure-Object -Maximum).Maximum
+        $columnWidths[$prop] = [Math]::Max($maxLength, $prop.Length) + 2  # Add padding
+    }
 
-        if ($operationState.Status -in @("NotStarted", "Running")) {
-            Start-Sleep -Seconds $retryAfter
+    # Print header
+    $header = ""
+    foreach ($prop in $properties) {
+        $header += (("{0,-" + $columnWidths[$prop] + "}") -f $prop)
+    }
+    Write-Host $header -ForegroundColor Cyan
+
+    # Print separator
+    $separator = ""
+    foreach ($prop in $properties) {
+        $separator += "-" * $columnWidths[$prop]
+    }
+    Write-Host $separator -ForegroundColor DarkGray
+
+    # Print rows
+    foreach ($item in $data) {
+        $row = ""
+        foreach ($prop in $properties) {
+            $row += (("{0,-" + $columnWidths[$prop] + "}") -f $item.$prop)
         }
-    } while(($operationState.Status -in @("NotStarted", "Running")) -and $wait)
+        Write-Host $row
+    }
+
+}
 
     
-    if ($operationState.Status -eq "Failed") {
-        Write-Host "The long running operation has been completed with failure. Error reponse: $($operationState.Error | ConvertTo-Json)" -ForegroundColor Red
+function GetLongRunningOperationStatus($operationId, $retryAfter, $wait = $false) {
+
+    try {    
+        # Get Long Running Operation
+        Write-Host "Polling long running operation ID '$operationId' has been started with a retry-after time of '$retryAfter' seconds."
+        
+        $getOperationState = "{0}/operations/{1}" -f $global:baseUrl, $operationId
+        do {
+            $operationState = Invoke-RestMethod -Headers $global:fabricHeaders -Uri $getOperationState -Method GET
+
+            Write-Host "Long running operation status: $($operationState.Status)"
+
+            if ($operationState.Status -in @("NotStarted", "Running")) {
+                Start-Sleep -Seconds [int]$retryAfter
+            }
+        } while (($operationState.Status -in @("NotStarted", "Running")) -and $wait)
+
+        
+        if ($operationState.Status -eq "Failed") {
+            Write-Host "The long running operation has been completed with failure. Error reponse: $($operationState.Error | ConvertTo-Json)" -ForegroundColor Red
+        }
+        
+        return $operationState.Status
+
+    }
+    catch {
+        $errorResponse = GetErrorResponse($_.Exception)
+        Write-Host "Failed to retrieve long running operation status. Error reponse: $errorResponse" -ForegroundColor Red
     }
     
-    return $operationState.Status
 }
 
 try {
@@ -161,10 +210,10 @@ try {
     $workspace = GetWorkspaceByName $workspaceName 
     
     # Verify the existence of the requested workspace
-	if(!$workspace) {
-	  Write-Host "A workspace with the requested name was not found." -ForegroundColor Red
-	  return
-	}
+    if (!$workspace) {
+        Write-Host "A workspace with the requested name was not found." -ForegroundColor Red
+        return
+    }
 
     # Get Status
     WriteHeaderMessage "Calling GET Status REST API - Git Status."
@@ -176,14 +225,26 @@ try {
     # Get selected changes
     $selectedChanges = @($gitStatusResponse.Changes | Where-Object {
         ($itemTypesNames -icontains $_.ItemMetadata.ItemType)
-    })
+        })
 
     # Checking if selected changes are greater than the batch size
     WriteHeaderMessage "Filtering selected changes by item type"
-    $selectedChanges | Format-Table -Property ItemMetadata.DisplayName, ItemMetadata.ItemType, workspaceChange, remoteChange, conflictType -AutoSize
-
+    $filteredChangesToDisplay = @()
+    $selectedChanges| ForEach-Object { 
+        $filteredChangesToDisplay += [PSCustomObject]@{
+            displayName = $_.ItemMetadata.DisplayName
+            itemType = $_.ItemMetadata.ItemType
+            workspaceChange = $_.WorkspaceChange
+            remoteChange = $_.RemoteChange
+            conflictType = $_.ConflictType
+        }
+    }
+    WriteTable $filteredChangesToDisplay
+    ### Commenting the line below to see the filtered changes since Format Table is not displaying correctly
+    ### $selectedChanges | Format-Table -Property @{Label = "DisplayName"; Expression = { $_.itemMetadata.displayName } }, @{Label = "ItemType"; Expression = { $_.itemMetadata.itemType } }, workspaceChange, remoteChange, conflictType -AutoSize
+    
     # Loop through the selected changes and group them by type
-    $groupedChanges = $selectedChanges | Group-Object -Property ItemMetadata.ItemType
+    $groupedChanges = $selectedChanges | Group-Object -Property { $_.ItemMetadata.ItemType }
     $batchOperations = @()
 
     # iterate through each group and process the changes and commit them to Git by batches
@@ -191,7 +252,7 @@ try {
         $itemType = $group.Name
         $items = $group.Group
 
-        Write-Host "Processing changes for item type: $itemType" -ForegroundColor Green
+        Write-Host "Processing changes for item type: $itemType. Items count $($items.Count)" -ForegroundColor Green
         
         # Process the items in batches
         for ($i = 0; $i -lt $items.Count; $i += $batchSize) {
@@ -204,13 +265,13 @@ try {
             $commitToGitUrl = "$global:baseUrl/workspaces/$($workspace.Id)/git/commitToGit"
 
             $commitToGitBody = @{ 		
-                mode = "Selective"
-                items = @($batch | ForEach-Object {@{
-                        objectId = $_.ItemMetadata.ItemIdentifier.ObjectId
-                        logicalId = $_.ItemMetadata.ItemIdentifier.LogicalId
-                    }
-                })
-                comment = $commitMessage
+                mode    = "Selective"
+                items   = @($batch | ForEach-Object { @{
+                            objectId  = $_.ItemMetadata.ItemIdentifier.ObjectId
+                            logicalId = $_.ItemMetadata.ItemIdentifier.LogicalId
+                        }
+                    })
+                comment = $commitMessage + " - item type: $itemType - batch count: $($batch.Count)" # Adding item type and batch count to the commit message for tracking
             } | ConvertTo-Json
 
             $commitToGitResponse = Invoke-WebRequest -Headers $global:fabricHeaders -Uri $commitToGitUrl -Method POST -Body $commitToGitBody
@@ -218,34 +279,36 @@ try {
             $operationId = $commitToGitResponse.Headers['x-ms-operation-id']
             $retryAfter = $commitToGitResponse.Headers['Retry-After']
             Write-Host "Long Running Operation ID: '$operationId' has been scheduled for committing changes from workspace '$workspaceName' to Git with a retry-after time of '$retryAfter' seconds." -ForegroundColor Green
-            $operationStatus = GetLongRunningOperationStatus -operationId $operationId -retryAfter $retryAfter
+            Start-Sleep -Seconds [int]$retryAfter
+            $operationStatus = GetLongRunningOperationStatus -operationId $operationId -retryAfter $retryAfter -wait $false
 
-            $batchOperations += @{ 		
-                batchId = $i
-                operationId  = $operationId
-                retryAfter = $retryAfter
-                workspaceId = $workspace.Id
+            $batchOperations += [PSCustomObject]@{ 		
+                batchId       = $i
+                operationId   = $operationId
+                retryAfter    = $retryAfter
                 workspaceName = $workspaceName
-                itemType = $itemType
-                itemCount = $batch.Count
-                items = $batch
-                status = $operationStatus
+                itemType      = $itemType
+                itemCount     = $batch.Count
+                status        = $operationStatus
             }
 
-        }       
+        }
     
     }
 
     # Print the batch operations
     WriteHeaderMessage "Git Commit Batches Operations Summary"
-    $batchOperations | Format-Table -Property workspaceName, itemType, batchId, itemCount, operationId, retryAfter, status -AutoSize
     
+    ### $batchOperations | Format-Table -Property workspaceName, itemType, batchId, itemCount, operationId, retryAfter, status -AutoSize
+    WriteTable $batchOperations
+
     Write-Host "Optionally, you can wait for the long-running operations to complete here or handle them separately." -ForegroundColor Yellow
     Write-Host "You can use the LongRunningOperation-Polling.ps1 script to check the status of the operations." -ForegroundColor Yellow
     Write-Host "Example: GetLongRunningOperationStatus -operationId {operation-id} -retryAfter {retry-after}" -ForegroundColor Yellow
     Write-Host "Example waiting for completion: GetLongRunningOperationStatus -operationId {operation-id} -retryAfter {retry-after} -wait `$true" -ForegroundColor Yellow
     
-} catch {
+}
+catch {
     $errorResponse = GetErrorResponse($_.Exception)
     Write-Host "Failed to commit changes from workspace '$workspaceName' to Git. Error reponse: $errorResponse" -ForegroundColor Red
 }
