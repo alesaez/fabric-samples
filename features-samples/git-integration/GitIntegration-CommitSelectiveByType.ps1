@@ -20,7 +20,7 @@ $workspaceName = "<WORKSPACE NAME>"       # The name of the workspace
 
 $commitMessage = "<COMMIT MESSAGE>"       # The commit message
 
-$itemTypesNames = @("CopyJob", "Dashboard", "DataPipeline", "Dataflow", "Datamart", "Environment", "Eventhouse", "Eventstream", "GraphQLApi", "KQLDashboard", "KQLDatabase", "KQLQueryset", "Lakehouse", "MLExperiment", "MLModel", "MirroredDatabase", "MirroredWarehouse", "MountedDataFactory", "Notebook", "PaginatedReport", "Reflex", "Report", "SQLDatabase", "SQLEndpoint", "SemanticModel", "SparkJobDefinition", "VariableLibrary", "Warehouse")  
+$itemTypesNames = @("CopyJob","Dashboard","DataPipeline","Dataflow","Datamart","Environment","Eventhouse","Eventstream","GraphQLApi","KQLDashboard","KQLDatabase","KQLQueryset","Lakehouse","MLExperiment","MLModel","MirroredDatabase","MirroredWarehouse","MountedDataFactory","Notebook","PaginatedReport","Reflex","Report","SQLDatabase","SQLEndpoint","SemanticModel","SparkJobDefinition","VariableLibrary","Warehouse")  
 
 $batchSize = 1000 # The number of items to be processed in each batch. The default value is 1000.
 
