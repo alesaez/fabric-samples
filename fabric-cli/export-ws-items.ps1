@@ -10,13 +10,13 @@
 # Login to Microsoft Fabric CLI if needed - uncomment the line below if you haven't logged in yet
 # fab auth login
 
-$workspaceName = "EWLH-POC" #"<WORKSPACE NAME>" # Replace with your workspace name
+$workspaceName = "<WORKSPACE NAME>" # Replace with your workspace name
 
 $pauseEachWorkspace = $false # Set to $true to pause after each workspace
 
 $timestamp = Get-Date -Format "yyyyMMddHHmm"
 $exportParentPath = ".\exports\$timestamp" # Path to export items 
-$exportItemTypes = @("DataPipeline") # Empty to Export all Items or you can specify especific items, currently supported: @("CopyJob","DataPipeline","Eventhouse","Eventstream","KQLDashboard","KQLDatabase","KQLQueryset","MirroredDatabase","MountedDataFactory","Notebook","Reflex","Report","SemanticModel","SparkJobDefinition","VariableLibrary")  
+$exportItemTypes = @() # Empty to Export all Items or you can specify especific items, currently supported: @("CopyJob","DataPipeline","Eventhouse","Eventstream","KQLDashboard","KQLDatabase","KQLQueryset","MirroredDatabase","MountedDataFactory","Notebook","Reflex","Report","SemanticModel","SparkJobDefinition","VariableLibrary")  
 
 if (-not (Test-Path -Path "$exportParentPath")) {
     New-Item -ItemType Directory -Path "$exportParentPath" | Out-Null
