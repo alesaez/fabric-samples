@@ -302,7 +302,8 @@ function FabricLogin {
     )
 
     if ((Get-Date) -gt $global:refreshTokenAfterDate) {
-        Write-Host
+        Write-Host "Fabric CLI token authentication - Refreshing token..." -ForegroundColor Yellow
+        AddLogMessage -Message "Fabric CLI token authentication - Refreshing token..."
         switch ($AuthType) {
             "Identity" {
                 fab auth login --identity
@@ -317,6 +318,6 @@ function FabricLogin {
                 Write-Host "Invalid authentication type. Please choose 'Identity', 'Interactive', or 'ServicePrincipal'."
             }
         }
-        $global:refreshTokenAfterDate = (Get-Date).AddDays(45)
+        $global:refreshTokenAfterDate = (Get-Date).AddMinutes(45)
     }
 }
