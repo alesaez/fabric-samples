@@ -172,7 +172,7 @@ function WriteTable($data) {
 }
 
     
-function GetLongRunningOperationStatus($operationId, $retryAfter, $wait = $false) {
+function GetLongRunningOperationStatus($operationId, [int]$retryAfter, $wait = $false) {
 
     try {    
         # Get Long Running Operation
@@ -185,7 +185,7 @@ function GetLongRunningOperationStatus($operationId, $retryAfter, $wait = $false
             Write-Host "Long running operation status: $($operationState.Status)"
 
             if ($operationState.Status -in @("NotStarted", "Running")) {
-                Start-Sleep -Seconds [int]$retryAfter
+                Start-Sleep -Seconds $retryAfter
             }
         } while (($operationState.Status -in @("NotStarted", "Running")) -and $wait)
 
@@ -277,9 +277,9 @@ try {
             $commitToGitResponse = Invoke-WebRequest -Headers $global:fabricHeaders -Uri $commitToGitUrl -Method POST -Body $commitToGitBody
 
             $operationId = $commitToGitResponse.Headers['x-ms-operation-id']
-            $retryAfter = $commitToGitResponse.Headers['Retry-After']
+            [int]$retryAfter = $commitToGitResponse.Headers['Retry-After']
             Write-Host "Long Running Operation ID: '$operationId' has been scheduled for committing changes from workspace '$workspaceName' to Git with a retry-after time of '$retryAfter' seconds." -ForegroundColor Green
-            Start-Sleep -Seconds [int]$retryAfter
+            Start-Sleep -Seconds $retryAfter
             $operationStatus = GetLongRunningOperationStatus -operationId $operationId -retryAfter $retryAfter -wait $false
 
             $batchOperations += [PSCustomObject]@{ 		
