@@ -31,6 +31,11 @@ function WriteHeaderMessage($message) {
     Write-Host ($messageSeparator + " " + $message + " " + $messageSeparator) -ForegroundColor Green
     Write-Host $lineSeparator -ForegroundColor Green
     Write-Host ""
+
+    # Add log message
+    AddLogMessage -Message $lineSeparator 
+    AddLogMessage -Message ($messageSeparator + " " + $message + " " + $messageSeparator)
+    AddLogMessage -Message $lineSeparator 
 }
 
 function WriteSubHeaderMessage($message) {
@@ -39,10 +44,15 @@ function WriteSubHeaderMessage($message) {
     Write-Host ""
     Write-Host ($messageSeparator + " " + $message + " " + $messageSeparator) -ForegroundColor Green
     Write-Host ""
+
+    # Add log message
+    AddLogMessage -Message ($messageSeparator + " " + $message + " " + $messageSeparator)
 }
 
 function WriteTable($data) {
     
+    AddLogMessage -Message ($data | Format-Table -AutoSize | Out-String)
+
     # Get property names dynamically
     $properties = $data[0].PSObject.Properties.Name
 
@@ -59,6 +69,7 @@ function WriteTable($data) {
         $header += (("{0,-" + $columnWidths[$prop] + "}") -f $prop)
     }
     Write-Host $header -ForegroundColor Cyan
+    # AddLogMessage -Message $header 
 
     # Print separator
     $separator = ""
@@ -66,6 +77,7 @@ function WriteTable($data) {
         $separator += "-" * $columnWidths[$prop]
     }
     Write-Host $separator -ForegroundColor DarkGray
+    # AddLogMessage -Message $separator
 
     # Print rows
     foreach ($item in $data) {
@@ -74,6 +86,7 @@ function WriteTable($data) {
             $row += (("{0,-" + $columnWidths[$prop] + "}") -f $item.$prop)
         }
         Write-Host $row
+        # AddLogMessage -Message $row
     }
 
 }
@@ -94,17 +107,22 @@ function FindAndReplaceMetadata($filePath, $fabricJsonMetadataMapper, $itemsMeta
                     Set-Content -Path $filePath -Value $updatedContent
                     $content = $updatedContent # Update content variable to avoid multiple replacements in the same file
                     Write-Host "Updated metadata in file: $filePath" -ForegroundColor Green
+                    AddLogMessage -Message "Updated metadata in file: $filePath" 
                     Write-Host "- $($item.SourceName) -> $($item.TargetName)" -ForegroundColor Green
+                    AddLogMessage -Message "- $($item.SourceName) -> $($item.TargetName)"
                 } else {
                     Write-Host "No metadata found to update in file: $filePath" -ForegroundColor Yellow
+                    AddLogMessage -Message "No metadata found to update in file: $filePath"
                 }
             } else {
                 Write-Host "No metadata mapping found for item type '$itemType'. Skipping file: $filePath" -ForegroundColor Yellow
+                AddLogMessage -Message "No metadata mapping found for item type '$itemType'. Skipping file: $filePath"
             }
         }
         
     } else {
         Write-Host "File not found: $filePath" -ForegroundColor Red
+        AddLogMessage -Message "File not found: $filePath"
     }
 }
 
@@ -148,6 +166,7 @@ function SortLocalItems {
             do {
                 foreach ($item in $itemsWithDependencies) {
                     Write-Host "Checking dependencies for item: $($item.DisplayName)"
+                    AddLogMessage -Message "Checking dependencies for item: $($item.DisplayName)"
                     $dependenciesNames = $item.Dependencies | ForEach-Object { $_.displayName + "." + $_.type }
                     
                     if (-not (($dependenciesNames | ForEach-Object { ($dataPipelinesSortedByDependencies.Name) -contains $_ }) -contains $false)) {
@@ -260,4 +279,44 @@ function SortFolders {
     
 
     return $sortedFolders
+}
+
+# Function to add information message on a log file
+function AddLogMessage {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+    
+    $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    $logMessage = "$timestamp - $Message"
+    Add-Content -Path $global:LogFilePath -Value $logMessage 
+}
+
+# Function to handle authentication options
+function FabricLogin {
+    param (
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Identity", "Interactive", "ServicePrincipal")]
+        [string]$AuthType
+    )
+
+    if ((Get-Date) -gt $global:refreshTokenAfterDate) {
+        Write-Host
+        switch ($AuthType) {
+            "Identity" {
+                fab auth login --identity
+            }
+            "Interactive" {
+                fab auth login 
+            }
+            "ServicePrincipal" {
+                fab auth login -u $global:clientId -p $global:clientSecret --tenant $global:tenantId
+            }
+            default {
+                Write-Host "Invalid authentication type. Please choose 'Identity', 'Interactive', or 'ServicePrincipal'."
+            }
+        }
+        $global:refreshTokenAfterDate = (Get-Date).AddDays(45)
+    }
 }

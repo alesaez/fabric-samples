@@ -7,16 +7,24 @@
 # Importing Helper functions
 . ./utils.ps1
 
-# Login to Microsoft Fabric CLI if needed - uncomment the line below if you haven't logged in yet
-# fab auth login
+$AuthType = "Interactive" # Set to  'Identity', 'Interactive', or 'ServicePrincipal'
+$global:clientId = "<client_id>" # Replace with your client ID
+$global:clientSecret = "<client_secret>" # Replace with your client secret
+$global:tenantId = "<tenant_id>" # Replace with your tenant ID
+$global:refreshTokenAfterDate = (Get-Date)
+
+FabricLogin -AuthType $AuthType 
 
 $workspaceName = "EWLH-POC" #"<WORKSPACE NAME>" # Replace with your workspace name
 
+$listItems = $true # Set to $true to list items in the workspace
 $pauseEachWorkspace = $false # Set to $true to pause after each workspace
 
-$timestamp = Get-Date -Format "yyyyMMddHHmm"
+$timestamp = (Get-Date -Format "yyyyMMddHHmm") # You can specify a custom timestamp if needed to re-run the script where you left off
 $exportParentPath = ".\exports\$timestamp" # Path to export items 
-$exportItemTypes = @("DataPipeline") # Empty to Export all Items or you can specify especific items, currently supported: @("CopyJob","DataPipeline","Eventhouse","Eventstream","KQLDashboard","KQLDatabase","KQLQueryset","MirroredDatabase","MountedDataFactory","Notebook","Reflex","Report","SemanticModel","SparkJobDefinition","VariableLibrary")  
+$global:LogFilePath = "$exportParentPath\log.txt" # Path to log files
+
+$exportItemTypes = @() # Empty to Export all Items or you can specify especific items, currently supported: @("CopyJob","DataPipeline","Eventhouse","Eventstream","KQLDashboard","KQLDatabase","KQLQueryset","MirroredDatabase","MountedDataFactory","Notebook","Reflex","Report","SemanticModel","SparkJobDefinition","VariableLibrary")  
 
 if (-not (Test-Path -Path "$exportParentPath")) {
     New-Item -ItemType Directory -Path "$exportParentPath" | Out-Null
@@ -38,7 +46,7 @@ foreach ($ws in $workspaces) {
 
     $wsItems = (fab api workspaces/$wsId/items | ConvertFrom-Json).text.value
 
-    Write-Host "Total items in workspace '$wsName': $($wsItems.Count) " 
+    Write-Host "Total items in workspace '$wsName': $($wsItems.Count)" 
     if ($wsItems.Count -eq 0) {
         continue
     }
@@ -95,12 +103,16 @@ foreach ($ws in $workspaces) {
     $exportableItems = $wsItems| Where-Object { $exportItemTypes -contains $_.Type }
     $notExportedItems = $wsItems | Where-Object { -not ($exportItemTypes -contains $_.Type) }
 
-    foreach ($item in $exportableItems) {
+    $itemsCount = $exportableItems.Count
+    
+    for ($i = 0; $i -lt $itemsCount; $i++) {
+        $item = $exportableItems[$i]
+        FabricLogin -AuthType $AuthType # Re-login to ensure the token is valid
+
         $itemFullName = $item.DisplayName + "." + $item.Type
         $itemName = $item.DisplayName
         $itemType = $item.Type
 
-        Write-Host "Exporting item: $itemFullName"
         $itemExportPath = $exportPath
         if ($item.folderId) {
             $itemFolder = $sortedFolders | Where-Object { $_.id -eq $item.folderId }
@@ -110,9 +122,16 @@ foreach ($ws in $workspaces) {
                 Write-Host "Folder for item '$itemName' not found. Exporting to root folder." -ForegroundColor Yellow
             }
         }
+        
+        Write-Host "Exporting item [$($i+1)/$itemsCount]: $itemExportPath\$itemFullName" -ForegroundColor Cyan
 
         try {
-            fab export "$wsFullName/$itemFullName" -o $itemExportPath -f
+            if (-not (Test-Path -Path (Join-Path -Path $itemExportPath -ChildPath $itemFullName))) {
+                fab export "$wsFullName/$itemFullName" -o $itemExportPath -f
+            }
+            else {
+                Write-Host "Item '$itemFullName' already exists in the export path. Skipping export." -ForegroundColor Yellow
+            }
         } catch {
             Write-Host "Failed to export item '$itemName' of type '$itemType'. Error: $_" -ForegroundColor Red
             $notExportedItems += $item
