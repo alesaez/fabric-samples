@@ -15,7 +15,7 @@ $global:refreshTokenAfterDate = (Get-Date)
 
 FabricLogin -AuthType $AuthType 
 
-$workspaceName = "EWLH-POC" #"<WORKSPACE NAME>" # Replace with your workspace name
+$workspaceName = "<WORKSPACE NAME>" # Replace with your workspace name
 
 $listItems = $true # Set to $true to list items in the workspace
 $pauseEachWorkspace = $false # Set to $true to pause after each workspace
