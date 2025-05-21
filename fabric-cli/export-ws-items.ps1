@@ -11,9 +11,6 @@ $AuthType = "Interactive" # Set to  'Identity', 'Interactive', or 'ServicePrinci
 $global:clientId = "<client_id>" # Replace with your client ID
 $global:clientSecret = "<client_secret>" # Replace with your client secret
 $global:tenantId = "<tenant_id>" # Replace with your tenant ID
-$global:refreshTokenAfterDate = (Get-Date)
-
-FabricLogin -AuthType $AuthType 
 
 $workspaceName = "<WORKSPACE NAME>" # Replace with your workspace name
 
@@ -29,6 +26,9 @@ $exportItemTypes = @() # Empty to Export all Items or you can specify especific 
 if (-not (Test-Path -Path "$exportParentPath")) {
     New-Item -ItemType Directory -Path "$exportParentPath" | Out-Null
 }
+$global:refreshTokenAfterDate = (Get-Date)
+
+FabricLogin -AuthType $AuthType 
 
 # List all workspaces for the current user
 $workspaces = (fab api -X get workspaces --show_headers | ConvertFrom-Json).text.value
@@ -56,6 +56,15 @@ foreach ($ws in $workspaces) {
     $sortedFolders = SortFolders -Folders $wsFolders
     WriteTable ($sortedFolders | Select-Object id, displayName,RelativePath)
 
+    # Adding Subfolder information to items
+    $wsItems | ForEach-Object {
+        $folderId = $_.folderId
+        if ($folderId) {
+            $subfolder = ($sortedFolders | Where-Object {$_.id -eq $folderId}).RelativePath
+            $_ | Add-Member -MemberType NoteProperty -Name subfolder -Value $subfolder -Force
+        }
+    }
+
     $itemsCountByType = $wsItems | Group-Object type | ForEach-Object {
         [PSCustomObject]@{
             Type  = $_.Name
@@ -67,7 +76,7 @@ foreach ($ws in $workspaces) {
 
     if ($listItems) {
         WriteSubHeaderMessage "Items Sorted by Type and Name"
-        WriteTable ($wsItems | Sort-Object Type, DisplayName | Select-Object DisplayName, Type, @{Name="Subfolder";Expression={if($_.folderId){$folderId = $_.folderId; ($sortedFolders | Where-Object {$_.id -eq $folderId}).RelativePath}else{""}}})
+        WriteTable ($wsItems | Sort-Object Type, DisplayName | Select-Object DisplayName, Type, Subfolder)
     }
 
     # Create new directory for exports if it doesn't exist
@@ -102,6 +111,7 @@ foreach ($ws in $workspaces) {
 
     $exportableItems = $wsItems| Where-Object { $exportItemTypes -contains $_.Type }
     $notExportedItems = $wsItems | Where-Object { -not ($exportItemTypes -contains $_.Type) }
+    $erroredItems = @()
 
     $itemsCount = $exportableItems.Count
     
@@ -124,17 +134,35 @@ foreach ($ws in $workspaces) {
         }
         
         Write-Host "Exporting item [$($i+1)/$itemsCount]: $itemExportPath\$itemFullName" -ForegroundColor Cyan
+        AddLogMessage -Message "Exporting item [$($i+1)/$itemsCount]: $itemExportPath\$itemFullName"
 
         try {
             if (-not (Test-Path -Path (Join-Path -Path $itemExportPath -ChildPath $itemFullName))) {
-                fab export "$wsFullName/$itemFullName" -o $itemExportPath -f
+                fab export "$wsFullName/$itemFullName" -o $itemExportPath -f 
+
+                if ($LASTEXITCODE -gt 0) {
+                    $errorMessage = (fab export "$wsFullName/$itemFullName" -o $itemExportPath -f) | Out-String
+                    Write-Host "Failed to export item '$itemName' of type '$itemType'. Error Code: $LASTEXITCODE" -ForegroundColor Red
+                    Write-Host $errorMessage -ForegroundColor Red
+                    
+                    AddLogMessage -Message "Failed to export item '$itemName' of type '$itemType'. Error Code: $LASTEXITCODE"
+                    AddLogMessage -Message $errorMessage
+
+                    $erroredItems += $item
+                }
+                else {
+                    Write-Host "Item '$itemName' of type '$itemType' exported successfully." -ForegroundColor Green
+                    AddLogMessage -Message "Item '$itemName' of type '$itemType' exported successfully."
+                }
+
             }
             else {
                 Write-Host "Item '$itemFullName' already exists in the export path. Skipping export." -ForegroundColor Yellow
+                AddLogMessage -Message "Item '$itemFullName' already exists in the export path. Skipping export."
             }
         } catch {
             Write-Host "Failed to export item '$itemName' of type '$itemType'. Error: $_" -ForegroundColor Red
-            $notExportedItems += $item
+            AddLogMessage -Message "Failed to export item '$itemName' of type '$itemType'. Error: $_"
         }
     }
 
@@ -146,15 +174,29 @@ foreach ($ws in $workspaces) {
                 Count = $_.Count
             }
         })
-    } else {
-        Write-Host "All items exported successfully." -ForegroundColor Green
+        
+        WriteSubHeaderMessage "Items Not Exported Sorted by Type and Name"
+        WriteTable ($notExportedItems | Sort-Object Type, DisplayName | Select-Object DisplayName, Type, Subfolder)
+    } 
+
+    if ($erroredItems.Count -gt 0) {
+        WriteSubHeaderMessage "Errored Items Summary"
+        WriteTable ($erroredItems | Group-Object type | ForEach-Object {
+            [PSCustomObject]@{
+                Type  = $_.Name
+                Count = $_.Count
+            }
+        })
+
+        WriteSubHeaderMessage "Errored Items List Sorted by Type and Name"
+        WriteTable ($erroredItems | Sort-Object Type, DisplayName | Select-Object DisplayName, Type, Subfolder)
     }
     
-
     if ($pauseEachWorkspace) {
         Write-Host "Press Enter to continue to the next workspace or Ctrl+C to stop execution..."
     }
 }
 
+Write-Host "Export completed. Check the log file at $global:LogFilePath for details." -ForegroundColor Green
 
 # End of script
