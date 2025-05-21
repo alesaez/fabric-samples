@@ -276,12 +276,8 @@ try {
 
             $commitToGitResponse = Invoke-WebRequest -Headers $global:fabricHeaders -Uri $commitToGitUrl -Method POST -Body $commitToGitBody
 
-            Write-Host ($commitToGitResponse.Headers | Out-String)
-
             $operationId = $commitToGitResponse.Headers['x-ms-operation-id'] | Select-Object -First 1
             $retryAfter = $commitToGitResponse.Headers['Retry-After'] | Select-Object -First 1
-
-            Write-Host "Retry-After GetType: $($retryAfter.GetType().Name) - Value: $retryAfter"
             
             Write-Host "Long Running Operation ID: '$operationId' has been scheduled for committing changes from workspace '$workspaceName' to Git with a retry-after time of '$retryAfter' seconds." -ForegroundColor Green
             Start-Sleep -Seconds $retryAfter
