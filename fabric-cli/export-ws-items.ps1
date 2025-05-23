@@ -7,26 +7,17 @@
 # Importing Helper functions
 . ./utils.ps1
 
-$AuthType = "Interactive" # Set to  'Identity', 'Interactive', or 'ServicePrincipal'
-$global:clientId = "<client_id>" # Replace with your client ID
-$global:clientSecret = "<client_secret>" # Replace with your client secret
-$global:tenantId = "<tenant_id>" # Replace with your tenant ID
+# Importing parameters
+. ./params.ps1
 
-$workspaceName = "<WORKSPACE NAME>" # Replace with your workspace name
-$listItems = $true # Set to $true to list items in the workspace
-$exportCSV = $true # Set to $true to export items to CSV
-$pauseEachWorkspace = $false # Set to $true to pause after each workspace
-
-$timestamp = (Get-Date -Format "yyyyMMddHHmm") # You can specify a custom timestamp if needed to re-run the script where you left off
-$exportParentPath = ".\exports\$timestamp" # Path to export items 
 $global:LogFilePath = "$exportParentPath\log.txt" # Path to log files
-
-$exportItemTypes = @() # Empty to Export all Items or you can specify especific items, currently supported: @("CopyJob","DataPipeline","Eventhouse","Eventstream","KQLDashboard","KQLDatabase","KQLQueryset","MirroredDatabase","MountedDataFactory","Notebook","Reflex","Report","SemanticModel","SparkJobDefinition","VariableLibrary")  
 
 if (-not (Test-Path -Path "$exportParentPath")) {
     New-Item -ItemType Directory -Path "$exportParentPath" | Out-Null
 }
 $global:refreshTokenAfterDate = (Get-Date)
+
+WriteMessage "Export started. Check the log file at $global:LogFilePath for details." -ForegroundColor Green
 
 FabricLogin -AuthType $AuthType 
 
