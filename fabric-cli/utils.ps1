@@ -304,7 +304,7 @@ function AddLogMessage {
     
     $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
     $logMessage = "$timestamp - $Message"
-    Add-Content -Path $global:LogFilePath -Value $logMessage 
+    $logMessage | Out-File -FilePath $global:LogFilePath -Append
 }
 
 # Function to handle authentication options
