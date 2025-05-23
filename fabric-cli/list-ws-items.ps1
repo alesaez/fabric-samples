@@ -7,26 +7,18 @@
 # Importing Helper functions
 . ./utils.ps1
 
-$AuthType = "Interactive" # Set to  'Identity', 'Interactive', or 'ServicePrincipal'
-$global:clientId = "<client_id>" # Replace with your client ID
-$global:clientSecret = "<client_secret>" # Replace with your client secret
-$global:tenantId = "<tenant_id>" # Replace with your tenant ID
+# Importing parameters
+. ./params.ps1
 
-$workspaceName = "<WORKSPACE NAME>" # Replace with your workspace name if Empty, it will list all workspaces
-$listItems = $true # Set to $true to list items in the workspace
-$exportCSV = $true # Set to $true to export items to CSV
-$pauseEachWorkspace = $false # Set to $true to pause after each workspace
-$replaceFileIfExists = $true # Set to $true to replace the file if it already exists
-
-$timestamp = Get-Date -Format "yyyyMMddHHmm"
-
-$auditParentPath = ".\audit\$timestamp" # Path to export audit files like workspace list
 $global:LogFilePath = "$auditParentPath\log.txt" # Path to log files
+
 if (-not (Test-Path -Path "$auditParentPath")) {
     New-Item -ItemType Directory -Path "$auditParentPath" | Out-Null
 }
 
 $global:refreshTokenAfterDate = (Get-Date)
+
+WriteMessage "Audit started. Check the log file at $global:LogFilePath for details." -ForegroundColor Green
 
 FabricLogin -AuthType $AuthType 
 
@@ -93,3 +85,5 @@ foreach ($ws in $workspaces) {
         Write-Host "Press Enter to continue to the next workspace or Ctrl+C to stop execution..."
     }
 }
+
+WriteMessage "Audit completed. Check the log file at $global:LogFilePath for details." -ForegroundColor Green
