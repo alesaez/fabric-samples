@@ -49,10 +49,17 @@ function WriteSubHeaderMessage($message) {
     AddLogMessage -Message ($messageSeparator + " " + $message + " " + $messageSeparator)
 }
 
+function WriteMessage($message,[System.ConsoleColor]$ForegroundColor = [System.Console]::ForegroundColor) {
+    
+    Write-Host $message -ForegroundColor $ForegroundColor
+
+    # Add log message
+    AddLogMessage -Message $message
+}
+
 function WriteTable($data) {
     
-    AddLogMessage -Message ($data | Format-Table -AutoSize | Out-String)
-
+    $tableRows = @("")
     # Get property names dynamically
     $properties = $data[0].PSObject.Properties.Name
 
@@ -65,11 +72,12 @@ function WriteTable($data) {
 
     # Print header
     $header = ""
+
     foreach ($prop in $properties) {
         $header += (("{0,-" + $columnWidths[$prop] + "}") -f $prop)
     }
     Write-Host $header -ForegroundColor Cyan
-    # AddLogMessage -Message $header 
+    $tableRows += $header
 
     # Print separator
     $separator = ""
@@ -77,7 +85,7 @@ function WriteTable($data) {
         $separator += "-" * $columnWidths[$prop]
     }
     Write-Host $separator -ForegroundColor DarkGray
-    # AddLogMessage -Message $separator
+    $tableRows += $separator
 
     # Print rows
     foreach ($item in $data) {
@@ -86,9 +94,11 @@ function WriteTable($data) {
             $row += (("{0,-" + $columnWidths[$prop] + "}") -f $item.$prop)
         }
         Write-Host $row
-        # AddLogMessage -Message $row
+        $tableRows += $row
     }
 
+    # AddLogMessage -Message ($data | Format-Table | Out-String)
+    AddLogMessage -Message ($tableRows | Out-String)
 }
 
 function FindAndReplaceMetadata($filePath, $fabricJsonMetadataMapper, $itemsMetadata) {
@@ -287,6 +297,10 @@ function AddLogMessage {
         [Parameter(Mandatory = $true)]
         [string]$Message
     )
+
+    if ($global:LogFilePath -eq $null) {
+        return
+    }
     
     $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
     $logMessage = "$timestamp - $Message"
