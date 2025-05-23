@@ -11,19 +11,29 @@ $AuthType = "Interactive" # Set to  'Identity', 'Interactive', or 'ServicePrinci
 $global:clientId = "<client_id>" # Replace with your client ID
 $global:clientSecret = "<client_secret>" # Replace with your client secret
 $global:tenantId = "<tenant_id>" # Replace with your tenant ID
-$global:refreshTokenAfterDate = (Get-Date)
-
-FabricLogin -AuthType $AuthType 
 
 $workspaceName = "<WORKSPACE NAME>" # Replace with your workspace name if Empty, it will list all workspaces
 $listItems = $true # Set to $true to list items in the workspace
 $exportCSV = $true # Set to $true to export items to CSV
 $pauseEachWorkspace = $false # Set to $true to pause after each workspace
+$replaceFileIfExists = $true # Set to $true to replace the file if it already exists
+
+$timestamp = Get-Date -Format "yyyyMMddHHmm"
+
+$auditParentPath = ".\audit\$timestamp" # Path to export audit files like workspace list
+$global:LogFilePath = "$auditParentPath\log.txt" # Path to log files
+if (-not (Test-Path -Path "$auditParentPath")) {
+    New-Item -ItemType Directory -Path "$auditParentPath" | Out-Null
+}
+
+$global:refreshTokenAfterDate = (Get-Date)
+
+FabricLogin -AuthType $AuthType 
 
 # List all workspaces for the current user
 $workspaces = (fab api -X get workspaces --show_headers | ConvertFrom-Json).text.value
 if ($exportCSV) {
-    $workspaces | Export-Csv -Path ".\workspaces.csv" -NoTypeInformation
+    $workspaces | Export-Csv -Path "$auditParentPath\workspaces.csv" -NoTypeInformation -Force:$replaceFileIfExists
 }
 
 if ($workspaceName) {
@@ -45,6 +55,7 @@ foreach ($ws in $workspaces) {
     }
 
     WriteSubHeaderMessage "Workspace Subfolders"
+
     $wsFolders = (fab api workspaces/$wsId/folders | ConvertFrom-Json).text.value
     $sortedFolders = SortFolders -Folders $wsFolders
     WriteTable ($sortedFolders | Select-Object id, displayName,RelativePath)
@@ -74,8 +85,8 @@ foreach ($ws in $workspaces) {
     }
 
     if ($exportCSV) {
-        Write-Host "Exported items to .\$($wsName)_items.csv"
-        $wsItems | Select-Object id, displayName, type, description, workspaceId, folderId, subfolder | Export-Csv -Path ".\$($wsName)_items.csv" -NoTypeInformation
+        Write-Host "Exported items to $auditParentPath\$($wsName)_items.csv"
+        $wsItems | Select-Object id, displayName, type, description, workspaceId, folderId, subfolder | Export-Csv -Path "$auditParentPath\$($wsName)_items.csv" -NoTypeInformation
     }
 
     if ($pauseEachWorkspace) {
